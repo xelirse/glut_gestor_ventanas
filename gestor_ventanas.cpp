@@ -1,4 +1,4 @@
-﻿#include <X11/Xlib.h>
+#include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <GL/gl.h>
 #include <GL/glut.h>
@@ -8,7 +8,7 @@
 Display* x_display = NULL;
 Window x_root;
 GLuint g_textureID = 0;
-int g_textureWidth = 800, g_textureHeight = 600;
+int g_textureWidth = 0, g_textureHeight = 0;
 
 void captureWindowAsTexture(Window window, int width, int height, bool init) {
     XImage* image = XGetImage(x_display, window, 0, 0, width, height, AllPlanes, ZPixmap);
@@ -48,7 +48,6 @@ void captureWindowAsTexture(Window window, int width, int height, bool init) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
                      GL_RGB, GL_UNSIGNED_BYTE, pixels);
     } else {
-        // Solo actualiza contenido, sin recrear textura
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
                         GL_RGB, GL_UNSIGNED_BYTE, pixels);
     }
@@ -72,22 +71,42 @@ void display() {
     glEnd();
 
     glutSwapBuffers();
-    glutPostRedisplay(); // fuerza refresco continuo
+    glutPostRedisplay(); // refresco continuo
 }
 
 int main(int argc, char** argv) {
     x_display = XOpenDisplay(NULL);
+    if (!x_display) {
+        fprintf(stderr, "No se pudo abrir el display X\n");
+        return 1;
+    }
+
     x_root = DefaultRootWindow(x_display);
+
+    // 🔧 Obtener tamaño real del root window
+    XWindowAttributes gwa;
+    XGetWindowAttributes(x_display, x_root, &gwa);
+    g_textureWidth = gwa.width;
+    g_textureHeight = gwa.height;
+
+    printf("Resolución detectada: %dx%d\n", g_textureWidth, g_textureHeight);
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
     glutInitWindowSize(g_textureWidth, g_textureHeight);
-    glutCreateWindow("Captura en tiempo real");
+    glutCreateWindow("Captura completa del escritorio");
+
+    glViewport(0, 0, g_textureWidth, g_textureHeight);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
 
     glGenTextures(1, &g_textureID);
     captureWindowAsTexture(x_root, g_textureWidth, g_textureHeight, true);
 
     glutDisplayFunc(display);
     glutMainLoop();
+
     return 0;
 }
